@@ -1,0 +1,128 @@
+---
+title: 'MATH 498 HW3'
+author: "Drew Remmenga"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+```{r}
+suppressMessages(library(fields))
+suppressMessages(library(matlib))
+suppressMessages(library(fda))
+suppressMessages(library( lubridate))
+load("~/School/MATH498/HW3/BoulderDaily.rda")
+
+dim(BoulderDaily)
+names(BoulderDaily)
+#######################################################
+########## omitting missing values across the data set
+#### but only include the temperatures as missing
+#### (including rainfall and snow have many more missing)
+#### this makes the subsequent analysis easier
+####
+#### call this new data frame BDClean
+####
+BDClean <- na.omit(BoulderDaily[, c(1:5, 9)])
+dim(BDClean) # note fewer nonmissing observations
+names(BDClean)
+
+
+BDates<- ymd( paste0(BDClean$year,"/",BDClean$month,"/",BDClean$day ))
+BDClean$dates<- BDates
+
+# find all years with fewer than 35 days missing
+# I think this is pretty hard R coding so it 
+# may take a few reads to figure this out. 
+timeYear<- year(BDates)
+countDays<- table( timeYear) 
+indGood<- countDays > 365 -35
+goodYears<- names( countDays)[ indGood]
+# NOTE goodYears are charcter strings 
+daysToKeep<- !is.na( match( as.character(timeYear), 
+                      goodYears)
+               )
+# subset data frame to years with more than 365 -35 obs
+BDClean<- BDClean[daysToKeep,]
+
+
+
+#Finally omit any rows of the data frame with a missing tmin
+ind<- !is.na(BDClean$tmin)
+BDClean<- BDClean[ind,]
+
+
+# s is the fraction of year for a particular day
+nYear<- ifelse(leap_year(BDClean$dates), 366, 365)
+s<-  yday(BDClean$dates)/ nYear
+
+Y<- BDClean$tmin
+fracOfYear<- s
+
+freqX <- outer(2 * pi * fracOfYear, 1:6, "*")
+dim(freqX)
+Phi <- cbind(rep(1, length(Y)),
+           sin(freqX), cos(freqX))
+
+colNames <-  c("Contant", paste0("S", 1:6), paste0("C", 1:6))
+dimnames(Phi) <-   list(NULL, colNames)
+
+LSFit1 <- lm( Y  ~ Phi-1)
+#
+
+# -1 means do not automatically include a
+# constant vector in the model
+# we have already built it into Phi
+#
+summary(LSFit1)
+
+```
+1.a.
+```{r}
+c<-inv(t(Phi)%*%Phi)%*%t(Phi)%*%Y
+c
+```
+These produce the same estimates.
+1.b.
+```{r}
+r<-(resid(LSFit1))
+mean(r)
+t(r)%*%Phi%*%c
+
+```
+For any basis.
+```{r}
+t(Phi)%*%Phi
+```
+1.e. 
+Residuals are all close to zero. As the graph progresses there becomes less width due to better temperature recording equipment.
+1.g.
+```{r}
+res<- r
+N<- length( res)
+res0<- res[ 2:N]
+res1<- res[1:(N-1)]
+bplot.xy(res0,res1)
+```
+Residuals from one day do appear to depend on residuals from the previous day.
+```{r}
+x<-c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20)
+gcd<- numeric()
+for (val in x) {
+freqX <- outer(2 * pi * fracOfYear, 1:val, "*")
+dim(freqX)
+Phi <- cbind(rep(1, length(Y)),
+           sin(freqX), cos(freqX))
+colNames <-  c("Contant", paste0("S", 1:val), paste0("C", 1:val))
+dimnames(Phi) <-   list(NULL, colNames)
+
+LSFit1 <- lm( Y  ~ Phi-1)
+p <-2*val+1
+M = ((1/N)*t(resid(LSFit1))%*%resid(LSFit1))/((1-p/N)^2)
+gcd<-c(gcd,M)
+}
+
+```
+
+```{r}
+plot(x,gcd,ylab="GCD",xlab="K",main ="GCD vs K")
+```
